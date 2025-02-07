@@ -1,0 +1,12 @@
+.venv/
+.vscode
+__pycache__/
+*.html
+*.pkl
+*.bin
+*.jpg
+*.zip
+*.rar
+*.jpg.baiduyun.uploading.cfg
+*.pth
+checkpoints/
