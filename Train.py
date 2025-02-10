@@ -12,6 +12,7 @@ import os
 from tensorboardX import SummaryWriter
 import numpy as np
 from src.bert import opt
+import gc
 os.environ['CUDA_VISIBLE_DEVICES']= '0'
 transform = transforms.Compose(
         [
@@ -23,10 +24,10 @@ transform = transforms.Compose(
 # device = ("cuda" if torch.cuda.is_available() else "cpu")
 device = torch.device('cuda:0')
 num_epochs =20
-batch_size =1
+batch_size = 4
 shuffle = True
 pin_memory = True
-num_workers = 1
+num_workers = 4
 rootpath=r''
 frame_interval=1
 input_shape=[224,224]
@@ -155,4 +156,6 @@ def train():
         logger.close()
 
 if __name__ == "__main__":
+    gc.collect()
+    torch.cuda.empty_cache()
     train()

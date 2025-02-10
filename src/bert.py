@@ -133,11 +133,11 @@ class TextModel(nn.Module):
     def __init__(self, opt):
         super(TextModel, self).__init__()
         # the root_path of bert model
-        abl_path = '.../bert/'
+        abl_path = './bert/'
 
         if opt.text_model == 'bert-base':
-            self.config = BertConfig.from_pretrained(abl_path + 'modeling_bert/bert-base-uncased-config.json')
-            self.model = BertForPreTraining.from_pretrained(abl_path + 'modeling_bert/bert-base-uncased-pytorch_model.bin', config=self.config)
+            self.config = BertConfig.from_pretrained("/home/ltran/LOTVS-CAP/bert/modeling_bert/bert-base-uncased-config.json")
+            self.model = BertForPreTraining.from_pretrained("/home/ltran/LOTVS-CAP/bert/modeling_bert/pytorch_model.bin", config=self.config)
             self.model = self.model.bert
 
         for param in self.model.parameters():
@@ -179,13 +179,13 @@ class embeding(nn.Module):
         num_patches = gh * gw
         # self.embedding = nn.Conv2d(3, emb_dim, kernel_size=(fh, fw), stride=(fh, fw))
         self.embedding = nn.Conv2d(3, emb_dim, kernel_size=(fh, fw),stride=(fh,fw))
-        self.downsampling=nn.Conv2d(emb_dim,120,kernel_size=(1,1),stride=(2,2))
+        self.upsampling=nn.Conv2d(emb_dim,120,kernel_size=(1,1),stride=(2,2))
 
 
 
     def forward(self, x):
         emb = self.embedding(x)
-        emb=self.downsampling(emb )
+        emb=self.upsampling(emb )
         emb = emb.permute(0, 2, 3, 1).contiguous()
         b, h, w, c = emb.shape
         emb = emb.reshape(b,h * w,c)

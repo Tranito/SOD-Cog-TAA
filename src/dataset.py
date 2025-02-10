@@ -23,6 +23,7 @@ class DADA(Dataset):
 
     def get_data_list(self):
         list_file = os.path.join(self.root_path, self.phase, self.phase + '.txt')
+        # print(f"list file: {list_file}")
         assert os.path.exists(list_file), "File does not exist! %s" % (list_file)
         fileIDs, labels, clips, toas,texts= [], [], [], [],[]
         samples_visited, visit_rows = [], []
@@ -49,6 +50,7 @@ class DADA(Dataset):
         #     clips = [clips[i] for i in visit_rows]
         #     toas = [toas[i] for i in visit_rows]
         # print(fileIDs,labels,clips,toas,texts )
+        # print(f"clips[319]: {clips[319]}")
         return fileIDs, labels, clips, toas, texts
 
     def __len__(self):
@@ -56,19 +58,37 @@ class DADA(Dataset):
 
 
     def read_rgbvideo(self, video_file, start, end):
+        # print(f"length of video file: {len(video_file)}")
         """Read video frames
         """
         # assert os.path.exists(video_file), "Path does not exist: %s" % (video_file)
         # get the video data
         video_datas = []
+        # if video_file == []:
+        #     print(f"video file: {video_file}")
+        # try:
+        #     print(f"end: {end}")
+        #     print(f"video_file[start]: {video_file[start]} \n")    
+        #     print(f"video_file[end]: {video_file[end]} \n")
+        # except Exception as e:
+        #     print(f"start: {start}")
+        #     print(f"end: {end}")    
+                
         for fid in range(start, end+1, self.interval):
+            # print(f"Video is going to be loaded!")
+            # print(f"fid: {fid}")
+            # print(video_file)
             video_data=video_file[fid]
             video_data=Image.open(video_data)
+            # print(f"Image opened")
+                # print(f"video_file_storage: {video_file_storage}")
             if self.transforms:
                 video_data = self.transforms(video_data)
                 video_data= np.asarray(video_data, np.float32)
                 video_datas.append(video_data)
         video_data = np.array(video_datas, dtype=np.float32) # 4D tensor
+        # print("Video loaded!")
+        # print("video returned!")
         return video_data
 
 
@@ -104,19 +124,40 @@ class DADA(Dataset):
 
 
     def __getitem__(self, index):
+        # print(f"index: {index}")
         # clip start and ending
         start, end = self.clips[index]
         # read RGB video (trimmed)
         video_path = os.path.join(self.root_path, self.phase, 'rgb_videos', self.data_list[index])
+        # print(video_path)        
         video_path=glob.glob(video_path+'/'+"*.jpg")
         video_path= sorted(video_path, key=lambda x: int((os.path.basename(x).split('.')[0]).split('_')[-1]))
+
+        if video_path == []:
+            print(f"length of video path: {len(video_path)}")
+            print(os.path.join(self.root_path, self.phase, 'rgb_videos', self.data_list[index]))
+            print(f"start, end: {start, end}")
+
+        # try:
         video_data = self.read_rgbvideo(video_path, start, end)
+        # print("video data obttained!")
+        # except Exception as e:
+        #     None
+            # print(f"video_path_previous: {video_path_previous}")
+            # print(f"video_path: {video_path}")
+        # video_path_previous = video_path
         #read focus video
+        # print("Video loaded!")
         focus_path = os.path.join(self.root_path, self.phase, 'focus_videos', self.data_list[index])
         focus_path = glob.glob(focus_path + '/' + "*.jpg")
         focus_path = sorted(focus_path, key=lambda x: int((os.path.basename(x).split('.')[0]).split('_')[-1]))
+        # print(f"length of focus path: {len(video_path)}\n\n")
+        # print("Focus video is going to be loaded!")
+        # print(focus_path)
         focus_data = self.read_foucsvideo(focus_path, start, end)
+        # print("focus path obtained!")
         data_info,y,texts= self.gather_info(index)
+        # print("information obtained!")
         return  video_data, focus_data, data_info,y,texts
 
 
@@ -138,7 +179,7 @@ if __name__=="__main__":
     shuffle = True
     pin_memory = True
     num_workers = 1
-    rootpath = r'G:\full-test'
+    rootpath = r''
     frame_interval = 1
     input_shape = [224, 224]
     seed = 123

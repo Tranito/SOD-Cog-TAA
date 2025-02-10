@@ -264,7 +264,6 @@
 29/034 1 109 258 257,a motorbike accelerately goes straight at signalized junctions
 29/034 1 113 262 257,a motorbike accelerately goes straight at signalized junctions
 29/034 1 116 265 257,a motorbike accelerately goes straight at signalized junctions
-29/035 1 0 149 70,a motorbike crosses the road
 3/006 1 0 149 134,a motorbike runs red light
 3/006 1 7 156 134,a motorbike runs red light
 3/007 1 0 149 70,a vehicle goes straight in the blind spot area
