@@ -401,7 +401,12 @@ class accident(nn.Module):
             x1 =x_11[:, i]
             x2 =z[:, i]
             tokens_tensor, input_masks_tensors=self.text(w)
+
+            #Replace this by CrossVLT
             x= self.fusion(tokens_tensor,input_masks_tensors,x1)
+            #Replace this by CrossVLT
+            
+            #self.features=st_gcn(self.sdim1 ,self.sdim2 ,self.keral)
             x = self.features(x)
             x=x.permute(0,2,1).contiguous()
             output1 = self.gru_net(x, hh)
