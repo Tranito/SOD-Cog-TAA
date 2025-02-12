@@ -60,7 +60,7 @@ def train():
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
-    logs_dir = '../logs'
+    logs_dir = '/home/ltran/LOTVS-CAP/logs'
     if not os.path.exists(logs_dir):
         os.makedirs(logs_dir)
     logger = SummaryWriter(logs_dir)
@@ -156,6 +156,11 @@ def train():
         logger.close()
 
 if __name__ == "__main__":
+    from args import get_parser
+    parser = get_parser()
+    args = parser.parse_args()
+    print("configured argument parser loaded!")
+    print(args)
     gc.collect()
     torch.cuda.empty_cache()
     train()

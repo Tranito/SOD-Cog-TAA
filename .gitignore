@@ -10,3 +10,4 @@ __pycache__/
 *.jpg.baiduyun.uploading.cfg
 *.pth
 checkpoints/
+logs/
