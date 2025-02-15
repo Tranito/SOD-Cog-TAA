@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
 import torch.utils.data
-from bert_crossvlt.configuration_bert import BertConfig
-from bert_crossvlt.modeling_bert import  BertModel, BertStage
+#Temporary adjustment remove later
+from CrossVLT.bert_crossvlt.configuration_bert import BertConfig
+from CrossVLT.bert_crossvlt.modeling_bert import  BertModel, BertStage
 
-
-from lib.seg_decoder import SimpleDecoding
-from lib.vision_encoder import  VisionStage
+#Temporary adjustment remove later
+from CrossVLT.lib.seg_decoder import SimpleDecoding
+from CrossVLT.lib.vision_encoder import  VisionStage
 
 import torch.nn.functional as F
 
@@ -61,20 +62,18 @@ class SegModel(nn.Module):
             self.backbone.append(layer)
 
         # language stages
-        config = BertConfig.from_json_file('config/config1.json')
+        #Temporary adjustment remove later
+        config = BertConfig.from_json_file('CrossVLT/config/config1.json')
         self.lang_stage1 = BertModel(config)
 
-        config1 = BertConfig.from_json_file('config/config2.json')
+        config1 = BertConfig.from_json_file('CrossVLT/config/config2.json')
         self.lang_stage2 = BertStage(config1)
 
-        config2 = BertConfig.from_json_file('config/config3.json')
+        config2 = BertConfig.from_json_file('CrossVLT/config/config3.json')
         self.lang_stage3 = BertStage(config2)
 
-        config3 = BertConfig.from_json_file('config/config4.json')
+        config3 = BertConfig.from_json_file('CrossVLT/config/config4.json')
         self.lang_stage4 = BertStage(config3)
-
-        # segmentation decoder
-        # self.classifier = SimpleDecoding(8*embed_dim)
         
         # temperature (Only used in train mode)
         if self.training:
@@ -111,7 +110,8 @@ class SegModel(nn.Module):
 
         model_dict = self.state_dict()
         pretrained_dict_new = {}
-        swin_pre = torch.load("./pretrained_swin/swin_small_patch4_window7_224_22k.pth",map_location=device)['model']
+        # Temporary adjustment remove later
+        swin_pre = torch.load("CrossVLT/pretrained/swin_base_patch4_window12_384_22k.pth",map_location=device)['model']
         
         for k, v in swin_pre.items():
             k = 'backbone.' + k
@@ -143,6 +143,17 @@ class SegModel(nn.Module):
         lang = F.normalize(lang, dim=1)
         m = torch.matmul(vis, lang).view(vis.size(0), Wh, Ww, 1).permute(0,3,1,2).contiguous()
         return m
+    
+    def downsample_1(self, x):
+        downsample_layer = nn.Linear(x.size(-1), 768).to(x.device)
+        x_down = downsample_layer(x)
+        return x_down
+    
+    def downsample_2(self, concat_features):
+        downsample_layer = nn.Linear(768, 120).to(concat_features.device)
+        x_down = downsample_layer(concat_features)
+        return x_down
+
 
     def forward(self, x, l, l_mask):
         input_shape = x.shape[-2:]
@@ -178,22 +189,12 @@ class SegModel(nn.Module):
 
         x_proj4, x4, x, Wh, Ww = self.backbone[3](x, Wh, Ww, last_hidden_states, l_mask_)
 
-        # # Segmentation Decoder
-        # x = self.classifier(x4,x3,x2,x1)
-        # x = F.interpolate(x, size=input_shape, mode='bilinear', align_corners=True)
-        
-        # # Train mode
-        # if self.training:
-        #     # Compute similarity map
-        #     t1,t2,t3,t4 = self.temp[0],self.temp[1], self.temp[2], self.temp[3]
-        #     sim1 = self.sim_map(x_proj1, cls1, 8*Wh, 8*Ww)
-        #     sim2 = self.sim_map(x_proj2, cls2, 4*Wh, 4*Ww)
-        #     sim3 = self.sim_map(x_proj3, cls3, 2*Wh, 2*Ww)
-        #     sim4 = self.sim_map(x_proj4, cls4, Wh, Ww)
+        x_down = self.downsample_1(x)
 
-        #     return x, sim1/t1, sim2/t2, sim3/t3, sim4/t4
+        concatenated_features = torch.cat([x_down, last_hidden_states], dim = 1)
 
-        concatenated_features = torch.cat([x, last_hidden_states], dim = 1)
+        #Downsample embedding dimension of concatenated features for Cog-TAA's GCN
+        concatenated_features = self.downsample_2(concatenated_features)
 
         # Evaluation mode
         return concatenated_features

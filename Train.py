@@ -13,6 +13,7 @@ from tensorboardX import SummaryWriter
 import numpy as np
 from src.bert import opt
 import gc
+from Test import validation, write_validation_scalars
 os.environ['CUDA_VISIBLE_DEVICES']= '0'
 transform = transforms.Compose(
         [
@@ -56,7 +57,7 @@ def write_test_scalars(logger, epoch, losses, metrics):
 
 def train():
     # the path to save model
-    model_dir =' '
+    model_dir ='models_train_1'
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
@@ -148,19 +149,21 @@ def train():
             scheduler1.step()
         #test and evaluate the model
         if (epoch+1) % 1==0:
+            model.eval()
+            ap, mTTA_0_5, mTTA, tta_r80, auc = validation(valdata_loader, model)
+            metrics = {"AP": ap, "mTTA_0_5": mTTA_0_5, "mTTA": mTTA, "TTA_R80": tta_r80, "AUC": auc}
+            write_validation_scalars(logger, epoch, metrics)
             model.train()
-            # save model
-            # best_model_file = os.path.join(model_dir, 'best_model.pth')
             model_file = os.path.join(model_dir, 'saved_model_%02d.pth'%(epoch))
             torch.save(model.state_dict(),model_file)
         logger.close()
 
 if __name__ == "__main__":
-    from args import get_parser
-    parser = get_parser()
-    args = parser.parse_args()
-    print("configured argument parser loaded!")
-    print(args)
+    # from args import get_parser
+    # parser = get_parser()
+    # args = parser.parse_args()
+    # print("configured argument parser loaded!")
+    # print(args)
     gc.collect()
     torch.cuda.empty_cache()
     train()

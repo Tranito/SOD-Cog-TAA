@@ -43,7 +43,8 @@ parse.add_argument('-num_class', type=int, default=2,
                    help='')
 parse.add_argument('-max_length', type=int, default=15,
                    help='the length of word')
-opt = parse.parse_args()
+#Change configured argument parser to prevent Jupyter Notebook from adding an unknown flag
+opt, unknown = parse.parse_known_args()
 
 
 
