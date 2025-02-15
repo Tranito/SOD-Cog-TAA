@@ -22,7 +22,7 @@ def get_parser():
     parser.add_argument('--split',  default='val', help='only used when testing')
     parser.add_argument('--refer_data_root', default='./refer/data/', help='REFER dataset root directory')
     parser.add_argument('--splitBy', default='unc', help='change to umd or google when the dataset is G-Ref (RefCOCOg)')
-    parser.add_argument('--swin_type', default='base',
+    parser.add_argument('--swin_type', default='small',
                         help='tiny, small, base, or large variants of the Swin Transformer')
     parser.add_argument('--pretrained_swin_weights', default='./pretrained/swin_base_patch4_window12_384_22k.pth',
                         help='path to pre-trained Swin backbone weights')
@@ -30,7 +30,7 @@ def get_parser():
                         help='Only needs specified when testing,'
                              'whether the weights to be loaded are from a DDP-trained model')
     parser.add_argument('--pin_mem', action='store_true', help='If true, pin memory when using the data loader.')
-    parser.add_argument('--img_size', default=480, type=int, help='input image size')
+    parser.add_argument('--img_size', default=224, type=int, help='input image size')
     parser.add_argument('--seed', default=12345)
     parser.add_argument('--window12', action='store_true',
                         help='only needs specified when testing,'
