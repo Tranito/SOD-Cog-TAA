@@ -15,7 +15,7 @@ import torch.utils.checkpoint
 from timm.models.layers import  trunc_normal_
 
 
-class SegModel(nn.Module):
+class SegModel_CogTAA(nn.Module):
     def __init__(self, 
                 args,
                 pretrain_img_size=512,
@@ -36,7 +36,7 @@ class SegModel(nn.Module):
                 training=True
                 ):
 
-        super(SegModel, self).__init__()
+        super(SegModel_CogTAA, self).__init__()
         self.args = args
         self.training = training
         self.backbone = nn.ModuleList()
@@ -161,33 +161,47 @@ class SegModel(nn.Module):
         # Stage 1
         last_hidden_states, att_mask_, head_mask,cls_token1 = self.lang_stage1(l, l_mask)
         l_mask_ = l_mask.unsqueeze(dim=1)
-        cls1 = cls_token1.unsqueeze(-1)
+        # cls1 = cls_token1.unsqueeze(-1)
+
+        ## Delete variables such that memory is cleared on the GPU
+        del cls_token1
         
-        x_proj1, x1, x, Wh, Ww, x_h = self.backbone[0](x, self.args.img_size//4, self.args.img_size//4, last_hidden_states, l_mask_)
-        image_atts = torch.ones(x_h.size()[:-1],dtype=torch.long).to(x.device)
+        x_proj1, x1, x, Wh, Ww, x_h = self.backbone[0](x, 224//4, 224//4, last_hidden_states, l_mask_)
+        del x_proj1, x1
+        image_atts = torch.ones(x_h.size()[:-1],dtype=torch.long).to(x_h.device)
+        # print(f"After stage 1: x_h size: {x_h.size()} image_atts size: {image_atts.size()}")
 
         # Stage 2
         last_hidden_states,cls_token2  = self.lang_stage2(last_hidden_states, attention_mask=att_mask_, head_mask=head_mask,
                                                 encoder_hidden_states=x_h, encoder_attention_mask=image_atts)
-        cls2 = cls_token2.unsqueeze(-1)
+        del cls_token2, image_atts
+        # cls2 = cls_token2.unsqueeze(-1)
 
         x_proj2, x2, x, Wh, Ww, x_h = self.backbone[1](x, Wh, Ww, last_hidden_states, l_mask_)
-        image_atts = torch.ones(x_h.size()[:-1],dtype=torch.long).to(x.device)
+        del x_proj2, x2
+        image_atts = torch.ones(x_h.size()[:-1],dtype=torch.long).to(x_h.device)
+        # print(f"After stage 2: x_h size: {x_h.size()} image_atts size: {image_atts.size()}")
 
         # Stage 3
         last_hidden_states,cls_token3 = self.lang_stage3(last_hidden_states, attention_mask=att_mask_, head_mask=head_mask,
                                                 encoder_hidden_states=x_h, encoder_attention_mask=image_atts)
-        cls3 = cls_token3.unsqueeze(-1)
+        del cls_token3, image_atts
+        # cls3 = cls_token3.unsqueeze(-1)
 
         x_proj3, x3, x, Wh, Ww, x_h = self.backbone[2](x, Wh, Ww, last_hidden_states, l_mask_)
-        image_atts = torch.ones(x_h.size()[:-1],dtype=torch.long).to(x.device)
+        del x_proj3, x3
+        image_atts = torch.ones(x_h.size()[:-1],dtype=torch.long).to(x_h.device)
+        # print(f"After stage 3: x_h size: {x_h.size()} image_atts size: {image_atts.size()}")
 
         # Stage 4
         last_hidden_states, cls_token4= self.lang_stage4(last_hidden_states, attention_mask=att_mask_, head_mask=head_mask,
                                                 encoder_hidden_states=x_h, encoder_attention_mask=image_atts)
-        cls4 = cls_token4.unsqueeze(-1)
+        del cls_token4, image_atts
+        # cls4 = cls_token4.unsqueeze(-1)
 
         x_proj4, x4, x, Wh, Ww = self.backbone[3](x, Wh, Ww, last_hidden_states, l_mask_)
+
+        # print(f"After stage 4: x_h size: {x_h.size()}")
 
         x_down = self.downsample_1(x)
 

@@ -393,6 +393,10 @@ class accident(nn.Module):
         #x:rgb、z:foucs、y:label(positive,negative)、toa:time to accident、w:word(text)
         losses = {'total_loss': 0}
         all_output=[]
+
+        #Save all driver fixation maps
+        #all_driver_fixations = torch.zeros((150,x.size(0),1,64,64), device=device)
+
         x_11 = x
         # hh is the initial hidden state
         hh = Variable(torch.zeros(self.n_layers, x_11.size(0), self.h_dim))
@@ -417,7 +421,9 @@ class accident(nn.Module):
             loss_sum=(5*L1+L2).mean()
             losses['total_loss'] += loss_sum
             all_output.append(output1)
-        return losses,all_output
+            # all_driver_fixations[i,:] = foucs_p.detach()
+            
+        return losses,all_output#, all_driver_fixations.permute(1,0,2,3,4).cpu().contiguous()
 
 
 

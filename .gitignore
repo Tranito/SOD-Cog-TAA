@@ -11,3 +11,5 @@ __pycache__/
 *.pth
 checkpoints/
 logs/
+src/dataset_copy.py
+src/*.ipynb
