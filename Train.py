@@ -14,6 +14,8 @@ import numpy as np
 from src.bert import opt
 import gc
 from Test import validation, write_validation_scalars
+# scaler = torch.amp.GradScaler()
+
 os.environ['CUDA_VISIBLE_DEVICES']= '0'
 transform = transforms.Compose(
         [
@@ -24,11 +26,11 @@ transform = transforms.Compose(
 
 # device = ("cuda" if torch.cuda.is_available() else "cpu")
 device = torch.device('cuda:0')
-num_epochs =20
-batch_size = 5
+num_epochs =10
+batch_size = 2
 shuffle = True
 pin_memory = True
-num_workers = 4
+num_workers = 1
 rootpath=r''
 frame_interval=1
 input_shape=[224,224]
@@ -57,11 +59,11 @@ def write_test_scalars(logger, epoch, losses, metrics):
 
 def train():
     # the path to save model
-    model_dir ='models_train_1'
+    model_dir ='all_models/models_train_original_ep_10_b_2_cogtaa_env'
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
-    logs_dir = '/home/ltran/LOTVS-CAP/logs'
+    logs_dir = 'all_logs/logs_original_ep_10_b_2_cogtaa_env'
     if not os.path.exists(logs_dir):
         os.makedirs(logs_dir)
     logger = SummaryWriter(logs_dir)
@@ -136,13 +138,22 @@ def train():
             labels = torch.from_numpy(labels)
             labels =labels.to(device)
             model.to(device)
+
+            # with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
             loss, outputs = model(imgs ,focus,labels.long(),toa,texts)
+
             opt1.zero_grad()
+            # scaler.scale(loss['total_loss'].mean()).backward()
+            # scaler.unscale_(opt1)
             loss['total_loss'].mean().backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(),10)
             opt1.step()
+
+            # scaler.step(opt1)
+            # scaler.update()
             loop.set_description(f"Epoch [{epoch+1}/{num_epochs}]")
             loop.set_postfix(loss = loss['total_loss'].item())
+
         write_scalars(logger,epoch,loss['total_loss'])
 
         if (epoch+1) % 5 == 0:
@@ -150,8 +161,8 @@ def train():
         #test and evaluate the model
         if (epoch+1) % 1==0:
             model.eval()
-            ap, mTTA_0_5, mTTA, tta_r80, auc = validation(valdata_loader, model)
-            metrics = {"AP": ap, "mTTA_0_5": mTTA_0_5, "mTTA": mTTA, "TTA_R80": tta_r80, "AUC": auc}
+            ap, mTTA_0_5, mTTA, tta_r80, auc, total_loss = validation(valdata_loader, model)
+            metrics = {"AP": ap, "mTTA_0_5": mTTA_0_5, "mTTA": mTTA, "TTA_R80": tta_r80, "AUC": auc, "avg_val_loss": total_loss}
             write_validation_scalars(logger, epoch, metrics)
             model.train()
             model_file = os.path.join(model_dir, 'saved_model_%02d.pth'%(epoch))

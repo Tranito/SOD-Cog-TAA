@@ -11,6 +11,7 @@ from src.eval_tools import evaluation, print_results, vis_results,evaluate_earli
 from src.bert import opt
 from src.dataset import DADA
 from natsort import natsorted
+from src.improved_model import improved_accident
 os.environ['CUDA_VISIBLE_DEVICES']= '0'
 transform = transforms.Compose(
         [
@@ -22,9 +23,9 @@ import pickle
 
 # device = ("cuda" if torch.cuda.is_available() else "cpu")
 device = torch.device('cuda:0')
-num_epochs = 50
+num_epochs = 1
 # learning_rate = 0.0001
-batch_size = 32
+batch_size = 2
 shuffle = True
 pin_memory = True
 num_workers = 2
@@ -44,9 +45,10 @@ val_data=DADA(rootpath , 'testing', interval=1,transform=transform)
 # print("Data has been loaded!")
 #valdata_loader is a DataLoader instance that wraps the val_data dataset.
 #It handles batching, shuffling (set to False), parallel data loading (num_workers), and uses pinned memory (pin_memory=True).
-
+# print(f"length val_data: {len(val_data)}")
 valdata_loader=DataLoader(dataset=val_data, batch_size=batch_size, shuffle=False,
                                   num_workers=num_workers, pin_memory=True,drop_last=True)
+# print(f"length of validation data loader: {len(valdata_loader)}")
 def write_scalars(logger, epoch, loss):
     logger.add_scalars('train/loss',{'loss':loss}, epoch)
 
@@ -57,9 +59,10 @@ def write_test_scalars(logger, epoch, losses, metrics):
     logger.add_scalars('test/accuracy/time-to-accident',{'mTTA':metrics['mTTA'], 'TTA_R80':metrics['TTA_R80']}, epoch)
 
 def write_validation_scalars(logger, epoch, metrics):
-    # logger.add_scalars('test/loss',{'loss':loss}, epoch)
+    logger.add_scalars('test/val_loss',{'val_loss':metrics['avg_val_loss']}, epoch)
     logger.add_scalars('test/accuracy/AP',{'AP':metrics['AP']}, epoch)
-    logger.add_scalars('test/accuracy/time-to-accident',{'mTTA':metrics['mTTA'], 'TTA_R80':metrics['TTA_R80']}, epoch)    
+    logger.add_scalars('test/accuracy/time-to-accident',{'mTTA':metrics['mTTA'], 'TTA_R80':metrics['TTA_R80'], "mTTA_0_5":metrics["mTTA_0_5"]},  epoch)  
+    logger.add_scalars('test/accuracy/ROC_AUC',{'ROC_AUC':metrics['AUC']},  epoch)    
 
 def test(test_dataloader, model):
     all_pred = []
@@ -113,6 +116,8 @@ def validation(test_dataloader, model):
     model.eval()
     with torch.no_grad():
         loop = tqdm(test_dataloader,total = len(test_dataloader), leave = True)
+        num_batches = len(test_dataloader)
+        total_loss = 0
         for imgs,focus,info,label,texts in loop:
             # print("For loop is going to be accessed!")
             # torch.cuda.empty_cache()
@@ -124,6 +129,15 @@ def validation(test_dataloader, model):
             labels = torch.from_numpy(labels)
             labels = labels.to(device)
             outputs = model(imgs,focus,labels.long(),toa,texts)
+            batch_loss = outputs[0]
+            
+            #In original model the loss is a dictionary while in improved model it is a scalar
+            #Check this such that validation can be used with original and improved model
+            if type(batch_loss) == dict:
+                total_loss += batch_loss['total_loss'].item()
+            else:
+                total_loss += batch_loss
+
             num_frames = imgs.size()[1]
             batch_size = imgs.size()[0]
             pred_frames = np.zeros((batch_size,num_frames),dtype=np.float32)
@@ -142,7 +156,7 @@ def validation(test_dataloader, model):
             all_labels.append(label)
             toas = np.squeeze(toa.cpu().numpy()).astype(np.int64)
             all_toas.append(toas)
-            loop.set_postfix(val_loss = sum(losses_all))
+            loop.set_postfix(val_loss = batch_loss)
     all_pred = np.concatenate(all_pred)
     all_labels = np.concatenate(all_labels)
     all_toas = np.concatenate(all_toas)
@@ -156,8 +170,75 @@ def validation(test_dataloader, model):
     all_vid_scores=[max(pred[int(toa):]) for toa, pred in zip(all_toas, all_pred)]
     
     AUC=roc_auc_score(all_labels,all_vid_scores)
-    print("[Correctness] v-AUC = %.5f." % (AUC))    
-    return AP, mTTA_0_5, mTTA, TTA_R80, AUC
+    print("[Correctness] v-AUC = %.5f." % (AUC))
+
+    avg_loss = total_loss / num_batches    
+    return AP, mTTA_0_5, mTTA, TTA_R80, AUC, avg_loss
+
+#New test function that allows for testing both the original Cog-TAA model and improved Cog-TAA
+def test_new(test_dataloader, model):
+    print('------Starting evaluation------')
+    all_pred = []
+    all_labels = []
+    losses_all = []
+    all_toas = []
+    model.eval()
+    with torch.no_grad():
+        loop = tqdm(test_dataloader,total = len(test_dataloader), leave = True)
+        num_batches = len(test_dataloader)
+        total_loss = 0
+        for imgs,focus,info,label,texts in loop:
+            # print("For loop is going to be accessed!")
+            # torch.cuda.empty_cache()
+            imgs=imgs.to(device)
+            focus=focus.to(device)
+            labels = label
+            toa = info[0:, 4].to(device)
+            labels = np.array(labels).astype(int)
+            labels = torch.from_numpy(labels)
+            labels = labels.to(device)
+            outputs = model(imgs,focus,labels.long(),toa,texts)
+            batch_loss = outputs[0]
+            
+            #In original model the loss is a dictionary while in improved model it is a scalar
+            #Check this such that validation can be used with original and improved model
+            if type(batch_loss) == dict:
+                total_loss += batch_loss['total_loss'].item()
+            else:
+                total_loss += batch_loss
+
+            num_frames = imgs.size()[1]
+            batch_size = imgs.size()[0]
+            pred_frames = np.zeros((batch_size,num_frames),dtype=np.float32)
+            for t in range(num_frames):
+                pred = outputs[1][t]
+                pred = pred.cpu().numpy() if pred.is_cuda else pred.detach().numpy()
+                pred_frames[:, t] = np.exp(pred[:, 1]) / np.sum(np.exp(pred), axis=1)
+            #gather results and ground truth
+            all_pred.append(pred_frames)
+            label_onehot = labels.cpu().numpy()
+            label = np.reshape(label_onehot[:, 1], [batch_size,])
+            all_labels.append(label)
+            toas = np.squeeze(toa.cpu().numpy()).astype(np.int64)
+            all_toas.append(toas)
+            loop.set_postfix(val_loss = batch_loss)
+    all_pred = np.concatenate(all_pred)
+    all_labels = np.concatenate(all_labels)
+    all_toas = np.concatenate(all_toas)
+    print("Evaluation metrics are going to be determined!")
+    mTTA_0_5 = evaluate_earliness(all_pred, all_labels, all_toas, fps=30, thresh=0.5)
+    print("\n[Earliness] mTTA@0.5 = %.4f seconds." % (mTTA_0_5))
+    AP, mTTA, TTA_R80 = evaluation(all_pred, all_labels, all_toas, fps=30)
+    print("[Correctness] AP = %.4f, mTTA = %.4f, TTA_R80 = %.4f" % (AP, mTTA, TTA_R80))
+    all_toas = [int(149) if toa == 151 else int(toa) for toa in all_toas]
+
+    all_vid_scores=[max(pred[int(toa):]) for toa, pred in zip(all_toas, all_pred)]
+    
+    AUC=roc_auc_score(all_labels,all_vid_scores)
+    print("[Correctness] v-AUC = %.5f." % (AUC))
+
+    avg_loss = total_loss / num_batches    
+    return all_pred, all_labels, all_toas
 
 def test_data():
     h_dim = 256
@@ -171,13 +252,13 @@ def test_data():
     s_dim2=opt.s_dim2
     keral=opt.keral
     num_class=opt.num_class
-    ckpt_path = r'/home/ltran/LOTVS-CAP/models_train/saved_model_05.pth'
-    weight = torch.load(ckpt_path)
-    model=accident(h_dim,n_layers,depth,adim,heads,num_tokens,c_dim,s_dim1,s_dim2,keral,num_class).to(device)
+    # ckpt_path = r'/home/ltran/LOTVS-CAP/checkpoints/Min_best_model.pth'
+    # weight = torch.load(ckpt_path)
+    model=improved_accident(h_dim,n_layers,depth,adim,heads,num_tokens,c_dim,s_dim1,s_dim2,keral,num_class).to(device)
     model.eval()
-    model.load_state_dict(weight)
+    # model.load_state_dict(weight)
     print('------Starting evaluation------')
-    all_pred, all_labels, all_toas= test(valdata_loader,model)
+    all_pred, all_labels, all_toas= test_new(valdata_loader,model)
     mTTA = evaluate_earliness(all_pred, all_labels, all_toas, fps=30, thresh=0.5)
     print("\n[Earliness] mTTA@0.5 = %.4f seconds." % (mTTA))
     AP, mTTA, TTA_R80 = evaluation(all_pred, all_labels, all_toas, fps=30)
@@ -186,14 +267,14 @@ def test_data():
 
     #Change accident frame to 150 which is the last frame when the ground truth accident frame is at the 151-th frame
     
-    # with open("all_pred.pkl", "wb") as f:
-    #     pickle.dump(all_pred, f)
+    with open("all_pred_improved_model_no_train.pkl", "wb") as f:
+        pickle.dump(all_pred, f)
 
-    # with open("all_labels.pkl", "wb") as f:
-    #     pickle.dump(all_labels, f)
+    with open("all_labels_improved_model_no_train.pkl", "wb") as f:
+        pickle.dump(all_labels, f)
 
-    # with open("all_toas.pkl", "wb") as f:
-    #     pickle.dump(all_toas, f)
+    with open("all_toas_improved_model_no_train.pkl", "wb") as f:
+        pickle.dump(all_toas, f)
 
     all_toas = [int(149) if toa == 151 else int(toa) for toa in all_toas]
 
