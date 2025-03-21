@@ -40,6 +40,14 @@ class SegModel_CogTAA(nn.Module):
         self.args = args
         self.training = training
         self.backbone = nn.ModuleList()
+        self.device = "cuda" if torch.cuda.is_available() else 'cpu'
+
+        # Used to downsample vision tokens for concatenation with lang tokens if using Swin Base
+        # self.downsample_1 = nn.Linear(1024, 768).to(self.device)
+
+        # Used to downsample tokens for Cog-TAA's GCN
+        self.downsample_2 = nn.Linear(768, 120).to(self.device)
+
         
         # vision stages
         for i in range(4):
@@ -111,7 +119,7 @@ class SegModel_CogTAA(nn.Module):
         model_dict = self.state_dict()
         pretrained_dict_new = {}
         # Temporary adjustment remove later
-        swin_pre = torch.load("CrossVLT/pretrained/swin_base_patch4_window12_384_22k.pth",map_location=device)['model']
+        swin_pre = torch.load("CrossVLT/pretrained/swin_tiny_patch4_window7_224_22k.pth",map_location=device)['model']
         
         for k, v in swin_pre.items():
             k = 'backbone.' + k
@@ -144,16 +152,10 @@ class SegModel_CogTAA(nn.Module):
         m = torch.matmul(vis, lang).view(vis.size(0), Wh, Ww, 1).permute(0,3,1,2).contiguous()
         return m
     
-    def downsample_1(self, x):
-        downsample_layer = nn.Linear(x.size(-1), 768).to(x.device)
-        x_down = downsample_layer(x)
-        return x_down
-    
-    def downsample_2(self, concat_features):
-        downsample_layer = nn.Linear(768, 120).to(concat_features.device)
-        x_down = downsample_layer(concat_features)
-        return x_down
-
+    # def downsample_1(self, x):
+    #     downsample_layer = nn.Linear(x.size(-1), 768).to(x.device)
+    #     x_down = downsample_layer(x)
+    #     return x_down
 
     def forward(self, x, l, l_mask):
         input_shape = x.shape[-2:]
@@ -203,9 +205,10 @@ class SegModel_CogTAA(nn.Module):
 
         # print(f"After stage 4: x_h size: {x_h.size()}")
 
-        x_down = self.downsample_1(x)
+        #Uncomment this when using Swin Base 
+        # x_down = self.downsample_1(x)
 
-        concatenated_features = torch.cat([x_down, last_hidden_states], dim = 1)
+        concatenated_features = torch.cat([x, last_hidden_states], dim = 1)
 
         #Downsample embedding dimension of concatenated features for Cog-TAA's GCN
         concatenated_features = self.downsample_2(concatenated_features)
